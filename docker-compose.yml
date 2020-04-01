@@ -7,10 +7,36 @@ services:
     networks:
       - foolstack
     environment:
-      MYSQL_ROOT_PASSWORD: pass
+      MYSQL_ROOT_PASSWORD: MYSQL_ROOT_PW
     volumes:
       - ff-db:/var/lib/mysql
       - ff-db-logs:/var/log/mysql
+  foolstack-phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: foolstack-phpmyadmin
+    restart: always
+    networks:
+      - foolstack
+    depends_on:
+      foolstack-db:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: MYSQL_ROOT_PW
+      PMA_HOST: foolstack-db
+      PMA_ABSOLUTE_URI: https://phpmyadmin.knot.dog/
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.phpmyadmin-knot.entrypoints=http"
+      - "traefik.http.routers.phpmyadmin-knot.rule=Host(`phpmyadmin.knot.dog`)"
+      - "traefik.http.middlewares.phpmyadmin-knot-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.phpmyadmin-knot.middlewares=phpmyadmin-knot-https-redirect"
+      - "traefik.http.routers.phpmyadmin-knot-secure.entrypoints=https"
+      - "traefik.http.routers.phpmyadmin-knot-secure.rule=Host(`phpmyadmin.knot.dog`)"
+      - "traefik.http.routers.phpmyadmin-knot-secure.tls=true"
+      - "traefik.http.routers.phpmyadmin-knot-secure.tls.certresolver=http"
+      - "traefik.http.routers.phpmyadmin-knot-secure.service=foolstack-phpmyadmin"
+      - "traefik.http.services.foolstack-phpmyadmin.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
   foolstack-php:
     image: suika/foolstack:php
     container_name: foolstack-php
@@ -30,7 +56,7 @@ services:
       - ff-foolframe-logs:/var/www/foolfuuka/app/foolz/foolframe/logs
 #      - ff-boards:/var/www/foolfuuka/public/foolfuuka/boards # uncomment for image uploads by foolfuuka
   foolstack-nginx:
-    image: suika/foolstack:nginx
+    build: ./nginx
     container_name: foolstack-nginx
     restart: always
     networks:
@@ -46,8 +72,44 @@ services:
       - ff-foolframe-temp:/var/www/foolfuuka/public/foolframe/foolz:ro
       - ff-foolfuuka-temp:/var/www/foolfuuka/public/foolfuuka/foolz:ro
       - ff-boards:/var/www/foolfuuka/public/foolfuuka/boards:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.knot.entrypoints=http"
+      - "traefik.http.routers.knot.rule=Host(`knot.dog`)"
+      - "traefik.http.middlewares.knot-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.knot.middlewares=phpmyadmin-knot-https-redirect"
+      - "traefik.http.routers.knot-secure.entrypoints=https"
+      - "traefik.http.routers.knot-secure.rule=Host(`knot.dog`)"
+      - "traefik.http.routers.knot-secure.tls=true"
+      - "traefik.http.routers.knot-secure.tls.certresolver=http"
+      - "traefik.http.routers.knot-secure.service=foolstack-nginx"
+      - "traefik.http.services.foolstack-nginx.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+  traefik:
+    image: traefik:v2.2
+    container_name: traefik
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.http.address=:80"
+      - "--entryPoints.https.address=:443"
+      - "--certificatesResolvers.le.acme.email=yiffmaster@knot.network"
+      - "--certificatesResolvers.le.acme.storage=/acme/acme.json"
+      - "--certificatesResolvers.le.acme.tlsChallenge=true"
+      - "--certificatesResolvers.le.acme.httpChallenge=true"
+      - "--certificatesResolvers.le.acme.httpChallenge.entryPoint=web"
     ports:
-      - 8080:80
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/acme:/acme
+    networks:
+      - foolstack
+      - proxy
   foolstack-redis:
     container_name: foolstack-redis
     image: healthcheck/redis
@@ -57,7 +119,7 @@ services:
     volumes:
       - ff-redis:/data
   foolstack-scraper:
-    image: suika/foolstack:eve # :asagi :eve :hayden
+    build: ./hayden # :asagi :eve :hayden
     container_name: foolstack-scraper
     restart: always
     networks:
@@ -66,10 +128,10 @@ services:
       foolstack-db:
         condition: service_healthy
     environment:
-      - SCRAPER_BOARDS=w,wg
       - SCRAPER_DOWNLOAD_MEDIA=True     # true/false if hayden, True/False if eve
       - SCRAPER_DOWNLOAD_THUMBS=True    # true/false if hayden, True/False if eve
     volumes:
+      - ./data/hayden/:/hayden/data/
       - ff-boards:/boards
   foolstack-sphinx:
     image: suika/foolstack:manticore
@@ -109,3 +171,7 @@ volumes:
 networks:
   foolstack:
     name: foolstack
+  proxy:
+    external: true
+env_file:
+  - .env

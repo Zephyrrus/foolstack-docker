@@ -1,0 +1,18 @@
+{
+    "source":{
+       "type":"4chan",
+       "boards":{
+          "b":{}
+       },
+       "apiDelay":0.8,
+       "boardDelay":30
+    },
+    "backend":{
+       "type":"Asagi",
+       "connectionString":"Server=foolstack-db; Port=3306; Database=asagi; Uid=asagi; Pwd=pass; CharSet=utf8mb4; IgnorePrepare=false;",
+       "downloadLocation":"/boards",
+       "fullImagesEnabled":true,
+       "thumbnailsEnabled":true,
+       "sqlConnectionPoolSize":12
+    }
+}
