@@ -7,7 +7,7 @@ services:
     networks:
       - foolstack
     environment:
-      MYSQL_ROOT_PASSWORD: MYSQL_ROOT_PW
+      "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
     volumes:
       - ff-db:/var/lib/mysql
       - ff-db-logs:/var/log/mysql
@@ -21,19 +21,19 @@ services:
       foolstack-db:
         condition: service_healthy
     environment:
-      MYSQL_ROOT_PASSWORD: MYSQL_ROOT_PW
+      "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
       PMA_HOST: foolstack-db
-      PMA_ABSOLUTE_URI: https://phpmyadmin.knot.dog/
+      PMA_ABSOLUTE_URI: https://${PHPMYADMIN_DOMAIN}/
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.phpmyadmin-knot.entrypoints=http"
-      - "traefik.http.routers.phpmyadmin-knot.rule=Host(`phpmyadmin.knot.dog`)"
+      - "traefik.http.routers.phpmyadmin-knot.rule=Host(`${PHPMYADMIN_DOMAIN}`)"
       - "traefik.http.middlewares.phpmyadmin-knot-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.phpmyadmin-knot.middlewares=phpmyadmin-knot-https-redirect"
       - "traefik.http.routers.phpmyadmin-knot-secure.entrypoints=https"
-      - "traefik.http.routers.phpmyadmin-knot-secure.rule=Host(`phpmyadmin.knot.dog`)"
+      - "traefik.http.routers.phpmyadmin-knot-secure.rule=Host(`${PHPMYADMIN_DOMAIN}`)"
       - "traefik.http.routers.phpmyadmin-knot-secure.tls=true"
-      - "traefik.http.routers.phpmyadmin-knot-secure.tls.certresolver=http"
+      - "traefik.http.routers.phpmyadmin-knot-secure.tls.certresolver=knot-resolver-dns"
       - "traefik.http.routers.phpmyadmin-knot-secure.service=foolstack-phpmyadmin"
       - "traefik.http.services.foolstack-phpmyadmin.loadbalancer.server.port=80"
       - "traefik.docker.network=proxy"
@@ -75,13 +75,13 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.knot.entrypoints=http"
-      - "traefik.http.routers.knot.rule=Host(`knot.dog`)"
+      - "traefik.http.routers.knot.rule=Host(`${MAIN_DOMAIN}`)"
       - "traefik.http.middlewares.knot-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.knot.middlewares=phpmyadmin-knot-https-redirect"
       - "traefik.http.routers.knot-secure.entrypoints=https"
-      - "traefik.http.routers.knot-secure.rule=Host(`knot.dog`)"
+      - "traefik.http.routers.knot-secure.rule=Host(`${MAIN_DOMAIN}`)"
       - "traefik.http.routers.knot-secure.tls=true"
-      - "traefik.http.routers.knot-secure.tls.certresolver=http"
+      - "traefik.http.routers.knot-secure.tls.certresolver=knot-resolver-dns"
       - "traefik.http.routers.knot-secure.service=foolstack-nginx"
       - "traefik.http.services.foolstack-nginx.loadbalancer.server.port=80"
       - "traefik.docker.network=proxy"
@@ -95,11 +95,13 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.http.address=:80"
       - "--entryPoints.https.address=:443"
-      - "--certificatesResolvers.le.acme.email=yiffmaster@knot.network"
-      - "--certificatesResolvers.le.acme.storage=/acme/acme.json"
-      - "--certificatesResolvers.le.acme.tlsChallenge=true"
-      - "--certificatesResolvers.le.acme.httpChallenge=true"
-      - "--certificatesResolvers.le.acme.httpChallenge.entryPoint=web"
+      - "--certificatesresolvers.knot-resolver-dns.acme.dnschallenge=true"
+      - "--certificatesresolvers.knot-resolver-dns.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.knot-resolver-dns.acme.email=${CF_API_EMAIL}"
+      - "--certificatesresolvers.knot-resolver-dns.acme.storage=/acme/acme.json"
+    environment: 
+      - "CF_API_EMAIL=${CF_API_EMAIL}"
+      - "CF_API_KEY=${CF_API_KEY}"
     ports:
       - 80:80
       - 443:443
@@ -107,6 +109,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data/acme:/acme
+    labels:
+      - "traefik.http.routers.traefik.tls.domains[0].main=${MAIN_DOMAIN}"
+      - "traefik.http.routers.traefik.tls.domains[0].sans=*.${MAIN_DOMAIN}"
+      - "traefik.http.routers.traefik.tls.certresolver=knot-resolver-dns"
     networks:
       - foolstack
       - proxy
@@ -173,5 +179,3 @@ networks:
     name: foolstack
   proxy:
     external: true
-env_file:
-  - .env
