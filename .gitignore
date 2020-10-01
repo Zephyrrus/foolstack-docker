@@ -1,3 +1,5 @@
 .idea
-bkp/
+.htpasswd
+.podcast_htpasswd
 .env
+metadata.db

@@ -7,7 +7,7 @@ services:
     networks:
       - foolstack
     environment:
-      "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+      - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
     volumes:
       - ff-db:/var/lib/mysql
       - ff-db-logs:/var/log/mysql
@@ -21,9 +21,9 @@ services:
       foolstack-db:
         condition: service_healthy
     environment:
-      "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
-      PMA_HOST: foolstack-db
-      PMA_ABSOLUTE_URI: https://${PHPMYADMIN_DOMAIN}/
+      - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+      - "PMA_HOST=foolstack-db"
+      - "PMA_ABSOLUTE_URI=https://${PHPMYADMIN_DOMAIN}/"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.phpmyadmin-knot.entrypoints=http"
@@ -32,6 +32,8 @@ services:
       - "traefik.http.routers.phpmyadmin-knot.middlewares=phpmyadmin-knot-https-redirect"
       - "traefik.http.routers.phpmyadmin-knot-secure.entrypoints=https"
       - "traefik.http.routers.phpmyadmin-knot-secure.rule=Host(`${PHPMYADMIN_DOMAIN}`)"
+      - "traefik.http.middlewares.phpmyadmin-knot-auth.basicauth.usersfile=/auth/.htpasswd"
+      - "traefik.http.routers.phpmyadmin-knot-secure.middlewares=phpmyadmin-knot-auth"
       - "traefik.http.routers.phpmyadmin-knot-secure.tls=true"
       - "traefik.http.routers.phpmyadmin-knot-secure.tls.certresolver=knot-resolver-dns"
       - "traefik.http.routers.phpmyadmin-knot-secure.service=foolstack-phpmyadmin"
@@ -77,9 +79,11 @@ services:
       - "traefik.http.routers.knot.entrypoints=http"
       - "traefik.http.routers.knot.rule=Host(`${MAIN_DOMAIN}`)"
       - "traefik.http.middlewares.knot-https-redirect.redirectscheme.scheme=https"
-      - "traefik.http.routers.knot.middlewares=phpmyadmin-knot-https-redirect"
+      - "traefik.http.routers.knot.middlewares=knot-https-redirect"
       - "traefik.http.routers.knot-secure.entrypoints=https"
       - "traefik.http.routers.knot-secure.rule=Host(`${MAIN_DOMAIN}`)"
+      - "traefik.http.middlewares.knot-auth.basicauth.usersfile=/auth/.htpasswd"
+      - "traefik.http.routers.knot-secure.middlewares=knot-auth"
       - "traefik.http.routers.knot-secure.tls=true"
       - "traefik.http.routers.knot-secure.tls.certresolver=knot-resolver-dns"
       - "traefik.http.routers.knot-secure.service=foolstack-nginx"
@@ -109,6 +113,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data/acme:/acme
+      - ./.htpasswd:/auth/.htpasswd
+      - ./.podcast_htpasswd:/auth/.podcast_htpasswd
     labels:
       - "traefik.http.routers.traefik.tls.domains[0].main=${MAIN_DOMAIN}"
       - "traefik.http.routers.traefik.tls.domains[0].sans=*.${MAIN_DOMAIN}"
@@ -151,6 +157,29 @@ services:
     volumes:
       - ff-sphinx-data:/var/lib/manticore
       - ff-sphinx-logs:/var/log/manticore
+  podcast-tinyfile:
+    image: tigerdockermediocore/tinyfilemanager-docker
+    container_name: podcast-tinyfile
+    restart: always
+    networks: 
+      - foolstack
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.podcast-knot.entrypoints=http"
+      - "traefik.http.routers.podcast-knot.rule=Host(`${PODCAST_DOMAIN}`)"
+      - "traefik.http.middlewares.podcast-knot-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.podcast-knot.middlewares=podcast-knot-https-redirect"
+      - "traefik.http.routers.podcast-knot-secure.entrypoints=https"
+      - "traefik.http.routers.podcast-knot-secure.rule=Host(`${PODCAST_DOMAIN}`)"
+      - "traefik.http.middlewares.podcast-knot-auth.basicauth.usersfile=/auth/.podcast_htpasswd"
+      - "traefik.http.routers.podcast-knot-secure.middlewares=podcast-knot-auth"
+      - "traefik.http.routers.podcast-knot-secure.tls=true"
+      - "traefik.http.routers.podcast-knot-secure.tls.certresolver=knot-resolver-dns"
+      - "traefik.http.routers.podcast-knot-secure.service=podcast-tinyfile"
+      - "traefik.http.services.podcast-tinyfile.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+    volumes:
+      - ./data/podcast:/data
 volumes:
   ff-foolframe-temp:     # FoolFrame generated content on the fly via php
     driver: local
